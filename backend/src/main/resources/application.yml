@@ -1,0 +1,35 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: coffee-online
+  datasource:
+    url: jdbc:mysql://localhost:3306/coffee_online?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: 123456
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 30000
+      connection-timeout: 30000
+      max-lifetime: 1800000
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.example.coffeeonline.entity
+
+jwt:
+  secret: coffee-online-secret-key-2024-must-be-at-least-32-characters
+  expire: 86400000
+
+thread-pool:
+  core-pool-size: 4
+  max-pool-size: 10
+  queue-capacity: 100
+  keep-alive-time: 60
+  thread-name-prefix: coffee-pool-

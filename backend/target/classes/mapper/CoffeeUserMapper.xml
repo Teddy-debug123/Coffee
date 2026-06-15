@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.coffeeonline.mapper.CoffeeUserMapper">
+
+    <select id="selectByUsername" resultType="com.example.coffeeonline.entity.CoffeeUser">
+        SELECT * FROM coffee_user WHERE username = #{username} AND status = 1
+    </select>
+
+    <select id="selectByEmail" resultType="com.example.coffeeonline.entity.CoffeeUser">
+        SELECT * FROM coffee_user WHERE email = #{email} AND status = 1
+    </select>
+
+    <update id="updatePasswordByEmail">
+        UPDATE coffee_user SET password = #{password}, updated_at = NOW() WHERE email = #{email}
+    </update>
+
+</mapper>
