@@ -53,7 +53,18 @@ public class JwtUtil {
     public Long getUserIdFromToken(String token) {
         Claims claims = parseToken(token);
         if (claims != null) {
-            return claims.get("userId", Long.class);
+            Object userId = claims.get("userId");
+            if (userId instanceof Number) {
+                return ((Number) userId).longValue();
+            }
+            if (userId instanceof String) {
+                try {
+                    return Long.parseLong(((String) userId).trim());
+                } catch (NumberFormatException ignored) {
+                    return null;
+                }
+            }
+            return null;
         }
         return null;
     }

@@ -27,12 +27,26 @@ public class BlendController {
     @Autowired
     private JwtUtil jwtUtil;
 
+    private Long getUserId(String token) {
+        if (token == null || token.isBlank()) {
+            return null;
+        }
+        String raw = token.replace("Bearer ", "").trim();
+        if (raw.isEmpty()) {
+            return null;
+        }
+        return jwtUtil.getUserIdFromToken(raw);
+    }
+
     @PostMapping("/save")
     public Result<CoffeeBlendRecord> saveBlend(
-            @RequestHeader("Authorization") String token,
+            @RequestHeader(value = "Authorization", required = false) String token,
             @Valid @RequestBody BlendRequest request) {
         
-        Long userId = jwtUtil.getUserIdFromToken(token.replace("Bearer ", ""));
+        Long userId = getUserId(token);
+        if (userId == null) {
+            return Result.unauthorized("请先登录");
+        }
         CoffeeBlendRecord record = blendService.saveBlend(
                 userId,
                 request.getBlendName(),
@@ -45,9 +59,12 @@ public class BlendController {
 
     @GetMapping("/records")
     public Result<List<CoffeeBlendRecord>> getBlendRecords(
-            @RequestHeader("Authorization") String token) {
+            @RequestHeader(value = "Authorization", required = false) String token) {
         
-        Long userId = jwtUtil.getUserIdFromToken(token.replace("Bearer ", ""));
+        Long userId = getUserId(token);
+        if (userId == null) {
+            return Result.unauthorized("请先登录");
+        }
         List<CoffeeBlendRecord> records = blendService.getBlendRecords(userId);
         return Result.success(records);
     }

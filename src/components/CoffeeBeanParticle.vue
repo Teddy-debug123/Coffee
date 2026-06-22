@@ -1,70 +1,80 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import * as THREE from 'three'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
 const containerRef = ref(null)
-let scene, camera, renderer, beans = []
+let scene, camera, renderer, beanMeshes = []
 let animationId
 let mouseX = 0, mouseY = 0
 let targetMouseX = 0, targetMouseY = 0
 let isLoaded = ref(false)
 let lastEmitTime = 0
-const EMIT_INTERVAL = 16 // 约60fps
+const EMIT_INTERVAL = 20
 
 // 物理参数
-const GRAVITY = -9.8
-const DAMPING = 0.3
-const GROUND_Y = -4
-const WALL_LEFT = -8
-const WALL_RIGHT = 8
-const MAX_BEANS = 800
+const GRAVITY = -12.0
+const DAMPING = 0.35
+const GROUND_Y = -5
+const WALL_LEFT = -10
+const WALL_RIGHT = 10
+const MAX_BEANS = 600
 
-// 简单的物理对象
+// 外部模型引用
+let beanModel = null
+let modelLoaded = false
+
 class PhysicsBean {
   constructor(mesh, x, y, z) {
     this.mesh = mesh
     this.velocity = new THREE.Vector3(
-      (Math.random() - 0.5) * 2,
-      Math.random() * 2,
-      (Math.random() - 0.5) * 2
+      (Math.random() - 0.5) * 2.5,
+      Math.random() * 2 + 1,
+      (Math.random() - 0.5) * 2.5
     )
     this.angularVelocity = new THREE.Vector3(
-      (Math.random() - 0.5) * 5,
-      (Math.random() - 0.5) * 5,
-      (Math.random() - 0.5) * 5
+      (Math.random() - 0.5) * 8,
+      (Math.random() - 0.5) * 8,
+      (Math.random() - 0.5) * 8
     )
     this.isSettled = false
     this.settleTime = 0
+    this.settleRotationAxis = new THREE.Vector3(
+      Math.random() - 0.5,
+      Math.random() - 0.5,
+      Math.random() - 0.5
+    ).normalize()
+    this.settleRotationSpeed = 0.3 + Math.random() * 0.5
   }
 
   update(deltaTime) {
-    if (this.isSettled) return
+    if (this.isSettled) {
+      this.mesh.rotateOnAxis(this.settleRotationAxis, this.settleRotationSpeed * deltaTime)
+      return
+    }
 
-    const dt = Math.min(deltaTime, 0.02)
+    const dt = Math.min(deltaTime, 0.025)
 
-    // 重力
     this.velocity.y += GRAVITY * dt
 
-    // 更新位置
     this.mesh.position.x += this.velocity.x * dt
     this.mesh.position.y += this.velocity.y * dt
     this.mesh.position.z += this.velocity.z * dt
 
-    // 更新旋转
     this.mesh.rotation.x += this.angularVelocity.x * dt
     this.mesh.rotation.y += this.angularVelocity.y * dt
     this.mesh.rotation.z += this.angularVelocity.z * dt
 
-    // 地面碰撞
     if (this.mesh.position.y < GROUND_Y) {
       this.mesh.position.y = GROUND_Y
       this.velocity.y *= -DAMPING
-      this.velocity.x *= 0.9
-      this.velocity.z *= 0.9
-      this.angularVelocity.multiplyScalar(0.8)
+      this.velocity.x *= 0.85
+      this.velocity.z *= 0.85
+      this.angularVelocity.multiplyScalar(0.7)
+      this.mesh.rotation.x *= 0.9
+      this.mesh.rotation.z *= 0.9
     }
 
-    // 墙壁碰撞
     if (this.mesh.position.x < WALL_LEFT) {
       this.mesh.position.x = WALL_LEFT
       this.velocity.x *= -DAMPING
@@ -73,23 +83,24 @@ class PhysicsBean {
       this.mesh.position.x = WALL_RIGHT
       this.velocity.x *= -DAMPING
     }
-    if (this.mesh.position.z < -5) {
-      this.mesh.position.z = -5
+    if (this.mesh.position.z < -6) {
+      this.mesh.position.z = -6
       this.velocity.z *= -DAMPING
     }
-    if (this.mesh.position.z > 5) {
-      this.mesh.position.z = 5
+    if (this.mesh.position.z > 6) {
+      this.mesh.position.z = 6
       this.velocity.z *= -DAMPING
     }
 
-    // 检查是否静止
     const speed = this.velocity.length()
-    if (speed < 0.1 && Math.abs(this.velocity.y) < 0.1) {
+    if (speed < 0.15 && Math.abs(this.velocity.y) < 0.15) {
       this.settleTime += dt
-      if (this.settleTime > 0.5) {
+      if (this.settleTime > 0.6) {
         this.isSettled = true
         this.velocity.set(0, 0, 0)
         this.angularVelocity.set(0, 0, 0)
+        this.mesh.rotation.x += (Math.random() - 0.5) * 0.3
+        this.mesh.rotation.z += (Math.random() - 0.5) * 0.3
       }
     } else {
       this.settleTime = 0
@@ -103,15 +114,14 @@ class PhysicsBean {
     const dy = this.mesh.position.y - other.mesh.position.y
     const dz = this.mesh.position.z - other.mesh.position.z
     const dist = Math.sqrt(dx * dx + dy * dy + dz * dz)
-    const minDist = 0.6
+    const minDist = 0.55
 
-    if (dist < minDist && dist > 0) {
+    if (dist < minDist && dist > 0.001) {
       const overlap = minDist - dist
       const nx = dx / dist
       const ny = dy / dist
       const nz = dz / dist
 
-      // 分离两个豆子
       const separation = overlap * 0.5
       this.mesh.position.x += nx * separation
       this.mesh.position.y += ny * separation
@@ -120,23 +130,22 @@ class PhysicsBean {
       other.mesh.position.y -= ny * separation
       other.mesh.position.z -= nz * separation
 
-      // 交换速度（简化的弹性碰撞）
       if (!this.isSettled) {
         const impact = Math.abs(this.velocity.dot(new THREE.Vector3(nx, ny, nz)))
-        if (impact > 0.5) {
+        if (impact > 0.3) {
           this.velocity.x -= nx * impact * DAMPING
           this.velocity.y -= ny * impact * DAMPING
           this.velocity.z -= nz * impact * DAMPING
-          this.angularVelocity.multiplyScalar(0.9)
+          this.angularVelocity.multiplyScalar(0.85)
         }
       }
       if (!other.isSettled) {
         const impact = Math.abs(other.velocity.dot(new THREE.Vector3(nx, ny, nz)))
-        if (impact > 0.5) {
+        if (impact > 0.3) {
           other.velocity.x += nx * impact * DAMPING
           other.velocity.y += ny * impact * DAMPING
           other.velocity.z += nz * impact * DAMPING
-          other.angularVelocity.multiplyScalar(0.9)
+          other.angularVelocity.multiplyScalar(0.85)
         }
       }
     }
@@ -145,8 +154,52 @@ class PhysicsBean {
 
 let physicsBeans = []
 
-const createBeanGeometry = () => {
-  const geometry = new THREE.SphereGeometry(0.25, 32, 32)
+/**
+ * 加载外部GLB模型
+ */
+const loadBeanModel = () => {
+  return new Promise((resolve) => {
+    const loader = new GLTFLoader()
+    loader.load('/coffee_bean.glb', (gltf) => {
+      const model = gltf.scene
+
+      model.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true
+          child.receiveShadow = true
+          if (child.material) {
+            child.material.roughness = 0.75
+            child.material.metalness = 0.05
+            child.material.clearcoat = 0.12
+            child.material.clearcoatRoughness = 0.5
+          }
+        }
+      })
+
+      const box = new THREE.Box3().setFromObject(model)
+      const size = box.getSize(new THREE.Vector3())
+      const scale = 0.5 / Math.max(size.x, size.y, size.z)
+      model.scale.set(scale, scale, scale)
+
+      const center = box.getCenter(new THREE.Vector3())
+      model.position.sub(center)
+
+      beanModel = model
+      modelLoaded = true
+      resolve()
+    }, undefined, (error) => {
+      console.error('Error loading model:', error)
+      modelLoaded = true
+      resolve()
+    })
+  })
+}
+
+/**
+ * 创建程序生成的咖啡豆几何体（作为模型加载失败的备选）
+ */
+const createFallbackBean = () => {
+  const geometry = new THREE.SphereGeometry(0.28, 64, 64)
   const positions = geometry.attributes.position
 
   for (let i = 0; i < positions.count; i++) {
@@ -155,49 +208,67 @@ const createBeanGeometry = () => {
     const z = positions.getZ(i)
 
     const length = Math.sqrt(x * x + y * y + z * z)
+    if (length === 0) continue
+
     const nx = x / length
     const ny = y / length
     const nz = z / length
 
     let scale = 1.0
-    // 拉伸为椭圆形（咖啡豆形状）
-    if (ny > 0.2) scale *= (1 - (ny - 0.2) * 0.4)
-    else if (ny < -0.3) scale *= (1 + (ny + 0.3) * 0.3)
+    const lengthFactor = 1.42
 
-    // 添加凹凸纹理
-    const noise = (Math.sin(x * 20) * Math.cos(y * 20) * Math.sin(z * 20)) * 0.015
-    scale += noise
+    const yAbs = Math.abs(ny)
+    let tipFactor = 1.0
+    if (yAbs > 0.6) {
+      tipFactor = 1.0 - (yAbs - 0.6) * 0.55
+    }
 
-    // 中间凹槽效果
-    const groove = Math.sin(ny * Math.PI) * 0.08
-    scale += groove
+    const grooveDepth = 0.18
+    const grooveWidth = 0.65
+    const distFromEquator = Math.abs(ny)
+    if (distFromEquator < grooveWidth) {
+      const grooveFactor = Math.cos((distFromEquator / grooveWidth) * (Math.PI / 2))
+      if (nz > 0) {
+        scale -= grooveDepth * grooveFactor * nz
+      }
+    }
 
-    positions.setXYZ(i, x * scale, y * scale * 1.3, z * scale * 0.65)
+    const flattenFactor = 0.72
+
+    const noise =
+      Math.sin(x * 25) * Math.cos(y * 25) * Math.sin(z * 25) * 0.012 +
+      Math.sin(x * 50 + z * 30) * 0.006 +
+      Math.cos(y * 40 + x * 20) * 0.008
+
+    const bulge = Math.sin(Math.abs(ny) * Math.PI) * 0.06
+    scale += bulge
+
+    const finalScale = scale * tipFactor + noise
+
+    positions.setXYZ(
+      i,
+      x * finalScale,
+      y * finalScale * lengthFactor,
+      z * finalScale * flattenFactor
+    )
   }
 
   geometry.computeVertexNormals()
-  return geometry
-}
-
-const createBeanMaterial = (index) => {
-  // 咖啡棕色调变化
-  const hue = 0.07 + (index % 10) * 0.005
-  const lightness = 0.22 + (index % 8) * 0.02
 
   const canvas = document.createElement('canvas')
-  canvas.width = 256
-  canvas.height = 256
+  canvas.width = 512
+  canvas.height = 512
   const ctx = canvas.getContext('2d')
-
-  const imageData = ctx.createImageData(256, 256)
+  const imageData = ctx.createImageData(512, 512)
   const data = imageData.data
 
-  for (let y = 0; y < 256; y++) {
-    for (let x = 0; x < 256; x++) {
-      const i = (y * 256 + x) * 4
+  for (let y = 0; y < 512; y++) {
+    for (let x = 0; x < 512; x++) {
+      const i = (y * 512 + x) * 4
       const noise1 = (Math.random() - 0.5) * 15
-      const noise2 = Math.sin(x * 0.15) * Math.cos(y * 0.15) * 8
-      const value = Math.floor(80 + noise1 + noise2 + lightness * 100)
+      const noise2 = Math.sin(x * 0.1) * Math.cos(y * 0.1) * 8
+      const gradient = Math.sin((y / 512) * Math.PI) * 10
+      const value = 100 + noise1 + noise2 + gradient
       data[i] = Math.min(255, value * 1.1)
       data[i + 1] = Math.min(255, value * 0.88)
       data[i + 2] = Math.min(255, value * 0.75)
@@ -209,48 +280,71 @@ const createBeanMaterial = (index) => {
   const texture = new THREE.CanvasTexture(canvas)
   texture.wrapS = THREE.RepeatWrapping
   texture.wrapT = THREE.RepeatWrapping
+  texture.repeat.set(2, 1)
 
-  return new THREE.MeshStandardMaterial({
-    color: new THREE.Color().setHSL(hue, 0.45, lightness),
-    roughness: 0.88,
-    metalness: 0.08,
-    bumpMap: texture,
-    bumpScale: 0.008,
-    envMapIntensity: 0.8
+  const material = new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color().setHSL(0.075, 0.4, 0.2),
+    map: texture,
+    roughness: 0.72,
+    metalness: 0.02,
+    clearcoat: 0.15,
+    clearcoatRoughness: 0.6,
+    envMapIntensity: 0.5
   })
+
+  return new THREE.Mesh(geometry, material)
+}
+
+/**
+ * 创建咖啡豆实例（优先使用外部模型，失败则用程序生成）
+ */
+const createBeanInstance = () => {
+  if (beanModel) {
+    const clone = beanModel.clone(true)
+    clone.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true
+        child.receiveShadow = true
+      }
+    })
+    return clone
+  }
+  return createFallbackBean()
 }
 
 const emitBeans = () => {
-  if (beans.length >= MAX_BEANS) return
+  if (beanMeshes.length >= MAX_BEANS || !modelLoaded) return
 
-  const geometry = createBeanGeometry()
+  const worldX = (targetMouseX / window.innerWidth) * 18 - 9
+  const worldY = -(targetMouseY / window.innerHeight) * 12 + 6
 
-  // 从鼠标位置发射
-  const worldX = (targetMouseX / window.innerWidth) * 16 - 8
-  const worldY = -(targetMouseY / window.innerHeight) * 10 + 5
-
-  const emitCount = Math.min(3, MAX_BEANS - beans.length)
+  const emitCount = Math.min(2, MAX_BEANS - beanMeshes.length)
 
   for (let i = 0; i < emitCount; i++) {
-    const material = createBeanMaterial(beans.length)
-    const bean = new THREE.Mesh(geometry, material)
+    const bean = createBeanInstance()
 
     bean.position.set(
-      worldX + (Math.random() - 0.5) * 1.5,
-      worldY + Math.random() * 0.5,
-      (Math.random() - 0.5) * 3
+      worldX + (Math.random() - 0.5) * 1.2,
+      worldY + Math.random() * 0.3,
+      (Math.random() - 0.5) * 4
+    )
+
+    bean.rotation.set(
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2
     )
 
     bean.castShadow = true
     bean.receiveShadow = true
 
-    beans.push(bean)
+    beanMeshes.push(bean)
     physicsBeans.push(new PhysicsBean(bean, bean.position.x, bean.position.y, bean.position.z))
     scene.add(bean)
   }
 }
 
-const initScene = () => {
+const initScene = async () => {
   const container = containerRef.value
   if (!container) return
 
@@ -258,13 +352,12 @@ const initScene = () => {
   const height = container.clientHeight
 
   scene = new THREE.Scene()
-  // 暗色背景，匹配Oryzo风格
-  scene.background = new THREE.Color(0x1a1512)
-  scene.fog = new THREE.Fog(0x1a1512, 8, 20)
+  scene.background = new THREE.Color(0x14100e)
+  scene.fog = new THREE.Fog(0x14100e, 10, 25)
 
-  camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100)
-  camera.position.set(0, 2, 12)
-  camera.lookAt(0, 0, 0)
+  camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100)
+  camera.position.set(0, 3, 14)
+  camera.lookAt(0, -1, 0)
 
   renderer = new THREE.WebGLRenderer({
     antialias: true,
@@ -275,15 +368,15 @@ const initScene = () => {
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFSoftShadowMap
   renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 1.0
+  renderer.toneMappingExposure = 0.9
+  renderer.outputColorSpace = THREE.SRGBColorSpace
   container.appendChild(renderer.domElement)
 
-  // 简洁的光照设置
-  const ambientLight = new THREE.AmbientLight(0xD4A574, 0.3)
+  const ambientLight = new THREE.AmbientLight(0x8b7355, 0.25)
   scene.add(ambientLight)
 
-  const mainLight = new THREE.DirectionalLight(0xFFF5E6, 0.8)
-  mainLight.position.set(5, 10, 5)
+  const mainLight = new THREE.DirectionalLight(0xffe4c4, 1.0)
+  mainLight.position.set(6, 12, 8)
   mainLight.castShadow = true
   mainLight.shadow.mapSize.width = 2048
   mainLight.shadow.mapSize.height = 2048
@@ -293,31 +386,39 @@ const initScene = () => {
   mainLight.shadow.camera.right = 15
   mainLight.shadow.camera.top = 15
   mainLight.shadow.camera.bottom = -15
-  mainLight.shadow.bias = -0.001
+  mainLight.shadow.bias = -0.0005
+  mainLight.shadow.radius = 4
   scene.add(mainLight)
 
-  const fillLight = new THREE.DirectionalLight(0x8B7355, 0.25)
-  fillLight.position.set(-5, 3, -5)
+  const fillLight = new THREE.DirectionalLight(0x6b5b4f, 0.3)
+  fillLight.position.set(-8, 4, -4)
   scene.add(fillLight)
 
-  // 地面（不可见，用于接收阴影）
-  const groundGeometry = new THREE.PlaneGeometry(30, 20)
-  const groundMaterial = new THREE.ShadowMaterial({ opacity: 0.3 })
+  const rimLight = new THREE.DirectionalLight(0xd4a574, 0.35)
+  rimLight.position.set(-2, 2, -10)
+  scene.add(rimLight)
+
+  const pointLight = new THREE.PointLight(0xc4965c, 0.4, 20)
+  pointLight.position.set(3, 5, 3)
+  scene.add(pointLight)
+
+  const groundGeometry = new THREE.PlaneGeometry(40, 30)
+  const groundMaterial = new THREE.ShadowMaterial({ opacity: 0.25 })
   const ground = new THREE.Mesh(groundGeometry, groundMaterial)
   ground.rotation.x = -Math.PI / 2
   ground.position.y = GROUND_Y
   ground.receiveShadow = true
   scene.add(ground)
 
-  // 预生成一些咖啡豆
-  for (let i = 0; i < 30; i++) {
-    const material = createBeanMaterial(i)
-    const bean = new THREE.Mesh(createBeanGeometry(), material)
+  await loadBeanModel()
+
+  for (let i = 0; i < 40; i++) {
+    const bean = createBeanInstance()
 
     bean.position.set(
-      (Math.random() - 0.5) * 12,
-      GROUND_Y + Math.random() * 3,
-      (Math.random() - 0.5) * 8
+      (Math.random() - 0.5) * 14,
+      GROUND_Y + Math.random() * 4,
+      (Math.random() - 0.5) * 10
     )
     bean.rotation.set(
       Math.random() * Math.PI,
@@ -327,7 +428,7 @@ const initScene = () => {
     bean.castShadow = true
     bean.receiveShadow = true
 
-    beans.push(bean)
+    beanMeshes.push(bean)
     const pb = new PhysicsBean(bean, bean.position.x, bean.position.y, bean.position.z)
     pb.isSettled = true
     physicsBeans.push(pb)
@@ -338,7 +439,7 @@ const initScene = () => {
 
   setTimeout(() => {
     isLoaded.value = true
-  }, 500)
+  }, 800)
 
   window.addEventListener('resize', onWindowResize)
   window.addEventListener('mousemove', onMouseMove)
@@ -352,37 +453,27 @@ const animate = () => {
   animationId = requestAnimationFrame(animate)
 
   const currentTime = Date.now()
-  const deltaTime = (currentTime - lastTime) / 1000
+  const deltaTime = Math.min((currentTime - lastTime) / 1000, 0.05)
   lastTime = currentTime
 
-  // 鼠标平滑跟随
-  mouseX += (targetMouseX - mouseX) * 0.1
-  mouseY += (targetMouseY - mouseY) * 0.1
+  mouseX += (targetMouseX - mouseX) * 0.08
+  mouseY += (targetMouseY - mouseY) * 0.08
 
-  // 相机轻微跟随鼠标
-  camera.position.x = mouseX * 0.02
-  camera.position.y = 2 - mouseY * 0.01
-  camera.lookAt(0, 0, 0)
-
-  // 发射新粒子
   if (currentTime - lastEmitTime > EMIT_INTERVAL) {
     emitBeans()
     lastEmitTime = currentTime
   }
 
-  // 更新物理
   for (const bean of physicsBeans) {
     bean.update(deltaTime)
   }
 
-  // 碰撞检测（简化版本，每帧只检测部分）
-  const checkCount = Math.min(50, physicsBeans.length)
+  const checkCount = Math.min(40, physicsBeans.length)
   for (let i = 0; i < checkCount; i++) {
     const idx = Math.floor(Math.random() * physicsBeans.length)
     const bean1 = physicsBeans[idx]
 
-    const nearbyCount = 10
-    for (let j = 0; j < nearbyCount; j++) {
+    for (let j = 0; j < 8; j++) {
       const idx2 = Math.floor(Math.random() * physicsBeans.length)
       if (idx !== idx2) {
         bean1.checkCollision(physicsBeans[idx2])
@@ -406,20 +497,20 @@ const onWindowResize = () => {
 }
 
 const onMouseMove = (event) => {
-  targetMouseX = event.clientX - window.innerWidth / 2
-  targetMouseY = event.clientY - window.innerHeight / 2
+  targetMouseX = event.clientX
+  targetMouseY = event.clientY
 }
 
 const onTouchMove = (event) => {
   if (event.touches.length > 0) {
-    targetMouseX = event.touches[0].clientX - window.innerWidth / 2
-    targetMouseY = event.touches[0].clientY - window.innerHeight / 2
+    targetMouseX = event.touches[0].clientX
+    targetMouseY = event.touches[0].clientY
   }
 }
 
 const onMouseLeave = () => {
-  targetMouseX = 0
-  targetMouseY = 0
+  targetMouseX = window.innerWidth / 2
+  targetMouseY = window.innerHeight / 2
 }
 
 onMounted(() => {
@@ -434,17 +525,30 @@ onUnmounted(() => {
 
   if (animationId) cancelAnimationFrame(animationId)
 
-  // 清理Three.js资源
-  beans.forEach(bean => {
-    bean.geometry.dispose()
-    bean.material.dispose()
+  beanMeshes.forEach(bean => {
+    bean.traverse((child) => {
+      if (child.isMesh) {
+        if (child.geometry) child.geometry.dispose()
+        if (child.material) child.material.dispose()
+      }
+    })
   })
-  beans = []
+  beanMeshes = []
   physicsBeans = []
+
+  if (beanModel) {
+    beanModel.traverse((child) => {
+      if (child.isMesh) {
+        if (child.geometry) child.geometry.dispose()
+        if (child.material) child.material.dispose()
+      }
+    })
+    beanModel = null
+  }
 
   if (renderer) {
     renderer.dispose()
-    if (containerRef.value) {
+    if (containerRef.value && renderer.domElement) {
       containerRef.value.removeChild(renderer.domElement)
     }
   }
@@ -463,7 +567,7 @@ onUnmounted(() => {
   top: 0;
   left: 0;
   opacity: 0;
-  transition: opacity 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 2s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: crosshair;
 }
 

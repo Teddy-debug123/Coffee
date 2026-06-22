@@ -24,8 +24,14 @@ public class UserController {
     private JwtUtil jwtUtil;
 
     @GetMapping("/info")
-    public Result<Map<String, Object>> getUserInfo(@RequestHeader("Authorization") String token) {
-        Long userId = jwtUtil.getUserIdFromToken(token.replace("Bearer ", ""));
+    public Result<Map<String, Object>> getUserInfo(@RequestHeader(value = "Authorization", required = false) String token) {
+        if (token == null || token.isBlank()) {
+            return Result.unauthorized("请先登录");
+        }
+        Long userId = jwtUtil.getUserIdFromToken(token.replace("Bearer ", "").trim());
+        if (userId == null) {
+            return Result.unauthorized("请先登录");
+        }
         CoffeeUser user = userService.getUserById(userId);
         
         if (user == null) {
@@ -46,10 +52,16 @@ public class UserController {
 
     @PutMapping("/info")
     public Result<Map<String, Object>> updateUserInfo(
-            @RequestHeader("Authorization") String token,
+            @RequestHeader(value = "Authorization", required = false) String token,
             @RequestBody UserUpdateRequest request) {
         
-        Long userId = jwtUtil.getUserIdFromToken(token.replace("Bearer ", ""));
+        if (token == null || token.isBlank()) {
+            return Result.unauthorized("请先登录");
+        }
+        Long userId = jwtUtil.getUserIdFromToken(token.replace("Bearer ", "").trim());
+        if (userId == null) {
+            return Result.unauthorized("请先登录");
+        }
         CoffeeUser user = userService.getUserById(userId);
         
         if (user == null) {

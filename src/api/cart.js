@@ -6,7 +6,7 @@ import request from '../utils/request'
  */
 export const getCartItems = () => {
   return request({
-    url: '/cart/list',
+    url: '/cart/items',
     method: 'get'
   })
 }
@@ -51,7 +51,7 @@ export const updateCartItem = (itemId, data) => {
  */
 export const deleteCartItem = (itemId) => {
   return request({
-    url: `/cart/delete/${itemId}`,
+    url: `/cart/remove/${itemId}`,
     method: 'delete'
   })
 }

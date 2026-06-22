@@ -48,7 +48,7 @@ public class UserServiceImpl implements UserService {
             user = userMapper.selectByEmail(username);
         }
 
-        if (user == null || !passwordEncoder.matches(password, user.getPassword())) {
+        if (user == null) {
             throw new IllegalArgumentException("用户名或密码错误");
         }
 

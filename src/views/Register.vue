@@ -208,9 +208,6 @@ onMounted(() => {
       </div>
     </div>
     
-    <footer class="register-footer">
-      <span>© 2024 Coffee Online. All rights reserved.</span>
-    </footer>
   </div>
 </template>
 

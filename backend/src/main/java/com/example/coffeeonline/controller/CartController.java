@@ -27,12 +27,27 @@ public class CartController {
     @Autowired
     private JwtUtil jwtUtil;
 
+    private Long getUserId(String token) {
+        if (token == null || token.isBlank()) {
+            return null;
+        }
+        String raw = token.replace("Bearer ", "").trim();
+        if (raw.isEmpty()) {
+            return null;
+        }
+        Long userId = jwtUtil.getUserIdFromToken(raw);
+        return userId;
+    }
+
     @PostMapping("/add")
     public Result<CoffeeCart> addItem(
-            @RequestHeader("Authorization") String token,
+            @RequestHeader(value = "Authorization", required = false) String token,
             @Valid @RequestBody CartAddRequest request) {
-        
-        Long userId = jwtUtil.getUserIdFromToken(token.replace("Bearer ", ""));
+
+        Long userId = getUserId(token);
+        if (userId == null) {
+            return Result.unauthorized("请先登录");
+        }
         CoffeeCart cart = cartService.addItem(
                 userId,
                 request.getProductType(),
@@ -44,11 +59,14 @@ public class CartController {
 
     @PutMapping("/update/{cartId}")
     public Result<Object> updateQuantity(
-            @RequestHeader("Authorization") String token,
+            @RequestHeader(value = "Authorization", required = false) String token,
             @PathVariable Long cartId,
             @Valid @RequestBody CartUpdateRequest request) {
-        
-        Long userId = jwtUtil.getUserIdFromToken(token.replace("Bearer ", ""));
+
+        Long userId = getUserId(token);
+        if (userId == null) {
+            return Result.unauthorized("请先登录");
+        }
         CoffeeCart cart = cartService.updateQuantity(userId, cartId, request.getQuantity());
         if (cart == null) {
             return Result.success("商品已移除");
@@ -58,10 +76,13 @@ public class CartController {
 
     @DeleteMapping("/remove/{cartId}")
     public Result<Object> removeItem(
-            @RequestHeader("Authorization") String token,
+            @RequestHeader(value = "Authorization", required = false) String token,
             @PathVariable Long cartId) {
-        
-        Long userId = jwtUtil.getUserIdFromToken(token.replace("Bearer ", ""));
+
+        Long userId = getUserId(token);
+        if (userId == null) {
+            return Result.unauthorized("请先登录");
+        }
         cartService.removeItem(userId, cartId);
         return Result.success("删除成功");
     }
@@ -69,19 +90,21 @@ public class CartController {
     @GetMapping("/items")
     public CompletableFuture<Result<List<Map<String, Object>>>> getCartItems(
             @RequestHeader(value = "Authorization", required = false) String token) {
-        
-        if (token == null || token.isEmpty()) {
+
+        Long userId = getUserId(token);
+        if (userId == null) {
             return CompletableFuture.completedFuture(Result.success(java.util.Collections.emptyList()));
         }
-        
-        Long userId = jwtUtil.getUserIdFromToken(token.replace("Bearer ", ""));
         return cartService.getCartItems(userId)
                 .thenApply(items -> Result.success(items));
     }
 
     @DeleteMapping("/clear")
-    public Result<Object> clearCart(@RequestHeader("Authorization") String token) {
-        Long userId = jwtUtil.getUserIdFromToken(token.replace("Bearer ", ""));
+    public Result<Object> clearCart(@RequestHeader(value = "Authorization", required = false) String token) {
+        Long userId = getUserId(token);
+        if (userId == null) {
+            return Result.unauthorized("请先登录");
+        }
         cartService.clearCart(userId);
         return Result.success("清空成功");
     }

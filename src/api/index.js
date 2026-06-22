@@ -37,14 +37,14 @@ export const cart = {
   clearCart: () => request.delete('/cart/clear')
 }
 
-export const stores = {
-  getStores: (params) => request.get('/stores', { params }),
-  getStoreById: (id) => request.get(`/stores/${id}`),
-  getCities: () => request.get('/stores/cities')
-}
-
 export const origin = {
   getPoints: () => request.get('/origin/points'),
   getDetail: (id) => request.get(`/origin/${id}`),
   getList: () => request.get('/origin/list')
+}
+
+export const subscription = {
+  subscribe: (email) => request.post('/subscription/subscribe', null, { params: { email } }),
+  unsubscribe: (email) => request.post('/subscription/unsubscribe', null, { params: { email } }),
+  checkStatus: (email) => request.get('/subscription/status', { params: { email } })
 }

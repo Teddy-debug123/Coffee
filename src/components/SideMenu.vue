@@ -1,7 +1,7 @@
 <script setup>
 import { watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Close, HomeFilled, Coffee, MapLocation, User, ShoppingBag } from '@element-plus/icons-vue'
+import { Close, HomeFilled, Coffee, MapLocation, User, ShoppingBag, Document, CreditCard } from '@element-plus/icons-vue'
 
 const props = defineProps({
   isOpen: {
@@ -17,9 +17,11 @@ const router = useRouter()
 const menuItems = [
   { name: '首页', icon: HomeFilled, path: '/home' },
   { name: '咖啡器具', icon: Coffee, path: '/equipment' },
-  { name: '线下门店', icon: MapLocation, path: '/stores' },
   { name: '个人中心', icon: User, path: '/profile' },
-  { name: '购物车', icon: ShoppingBag, path: '/cart' }
+  { name: '购物车', icon: ShoppingBag, path: '/cart' },
+  { name: '我的订单', icon: Document, path: '/orders' },
+  { name: '收货地址', icon: MapLocation, path: '/addresses' },
+  { name: '我的钱包', icon: CreditCard, path: '/wallet' }
 ]
 
 const navigateTo = (path) => {

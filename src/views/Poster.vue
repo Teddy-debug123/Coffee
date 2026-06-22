@@ -1,7 +1,8 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import CoffeeBeanParticle from '../components/CoffeeBeanParticle.vue'
+import { subscription } from '../api/index'
 
 const router = useRouter()
 const isLoading = ref(true)
@@ -10,11 +11,35 @@ const showContent = ref(false)
 const isTransitioning = ref(false)
 
 const email = ref('')
+const isSubmitting = ref(false)
+const toast = ref({ show: false, message: '', type: 'success' })
 
-const subscribeEmail = () => {
-  if (email.value) {
-    alert(`订阅邮箱: ${email.value}`)
+const showToast = (message, type = 'success') => {
+  toast.value = { show: true, message, type }
+  setTimeout(() => {
+    toast.value.show = false
+  }, 3000)
+}
+
+const subscribeEmail = async () => {
+  if (!email.value || isSubmitting.value) return
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(email.value)) {
+    showToast('请输入有效的邮箱地址', 'error')
+    return
+  }
+
+  isSubmitting.value = true
+
+  try {
+    await subscription.subscribe(email.value)
+    showToast('订阅成功，感谢您的关注！')
     email.value = ''
+  } catch (error) {
+    showToast(error?.message || '订阅失败，请稍后重试', 'error')
+  } finally {
+    isSubmitting.value = false
   }
 }
 
@@ -53,6 +78,11 @@ onMounted(() => {
   setTimeout(() => {
     showContent.value = true
   }, 2500)
+})
+
+onUnmounted(() => {
+  isLoaded.value = false
+  isTransitioning.value = false
 })
 </script>
 
@@ -110,8 +140,9 @@ onMounted(() => {
             placeholder="your@email.com"
             class="subscribe-input"
           />
-          <button class="subscribe-btn" @click="subscribeEmail">
-            <span>Subscribe</span>
+          <button class="subscribe-btn" @click="subscribeEmail" :disabled="isSubmitting">
+            <span v-if="!isSubmitting">Subscribe</span>
+            <span v-else>Subscribing...</span>
           </button>
         </div>
       </div>
@@ -127,15 +158,11 @@ onMounted(() => {
       </button>
     </div>
 
-    <!-- Footer -->
-    <footer class="poster-footer" :class="{ visible: showContent }">
-      <div class="footer-left">
-        <span class="footer-text">© 2024 Coffee Online</span>
+    <Transition name="toast">
+      <div v-if="toast.show" class="subscribe-toast" :class="toast.type">
+        {{ toast.message }}
       </div>
-      <div class="footer-right">
-        <span class="footer-text">All rights reserved</span>
-      </div>
-    </footer>
+    </Transition>
 
     <!-- Corner Decorations -->
     <div class="corner-decoration top-left"></div>
@@ -499,6 +526,47 @@ onMounted(() => {
   font-weight: 400;
   letter-spacing: 0.1em;
   color: rgba(245, 245, 245, 0.6);
+}
+
+/* Toast Notification */
+.subscribe-toast {
+  position: fixed;
+  bottom: 8rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.75rem 1.75rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  z-index: 200;
+  opacity: 0;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.subscribe-toast.success {
+  background: rgba(100, 181, 246, 0.9);
+  color: #1a1512;
+}
+
+.subscribe-toast.error {
+  background: rgba(239, 83, 80, 0.9);
+  color: #F5F5F5;
+}
+
+.toast-enter-active,
+.toast-leave-active {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.toast-enter-from {
+  opacity: 0;
+  transform: translateX(-50%) translateY(20px);
+}
+
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-10px);
 }
 
 /* Corner Decorations */

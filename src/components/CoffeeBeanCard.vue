@@ -1,220 +1,92 @@
-<script setup>import { ref } from 'vue';
-import { useCartStore } from '../stores/cart';
-import { audioManager } from '../utils/audio';
-const props = defineProps({
- bean: {
- type: Object,
- required: true
- }
-});
-const cartStore = useCartStore();
-const isHovered = ref(false);
-const isAdding = ref(false);
+<script setup>
+import { ref, reactive } from 'vue'
+import { useRouter } from 'vue-router'
+import { useCartStore } from '../stores/cart'
+import { useUserStore } from '../stores/user'
+import { audioManager } from '../utils/audio'
+import { ElMessageBox } from 'element-plus'
+const props = defineProps({ bean: { type: Object, required: true } })
+const cartStore = useCartStore()
+const userStore = useUserStore()
+const router = useRouter()
+const isHovered = ref(false)
+const isAdding = ref(false)
+const cardRef = ref(null)
+const rotation = reactive({ x: 0, y: 0 })
+const handleMouseMove = (e) => {
+  if (!cardRef.value) return
+  const rect = cardRef.value.getBoundingClientRect()
+  const x = (e.clientX - rect.left) / rect.width - 0.5
+  const y = (e.clientY - rect.top) / rect.height - 0.5
+  rotation.x = -y * 8
+  rotation.y = x * 8
+}
+const handleMouseLeave = () => {
+  rotation.x = 0
+  rotation.y = 0
+}
 const handleAddToCart = async () => {
- if (isAdding.value)
- return;
- isAdding.value = true;
- audioManager.playClick();
- await cartStore.addItem(props.bean);
- setTimeout(() => {
- isAdding.value = false;
- }, 600);
-};
+  if (!userStore.isLoggedIn) {
+    await ElMessageBox.confirm('需要登录后才能加入购物车', '提示', {
+      confirmButtonText: '去登录',
+      cancelButtonText: '继续浏览',
+      type: 'info'
+    }).then(() => {
+      router.push('/login?redirect=' + encodeURIComponent(router.currentRoute.value.fullPath))
+    }).catch(() => {})
+    return
+  }
+  if (isAdding.value) return
+  isAdding.value = true
+  audioManager.playClick()
+  await cartStore.addItem(props.bean)
+  setTimeout(() => { isAdding.value = false }, 500)
+}
+const openDetail = () => {
+  const routes = {
+    1: '/coffee-bean/ethiopia-yirgacheffe/1',
+    2: '/coffee-bean/colombia-huilan/2',
+    3: '/coffee-bean/brazil-santos/3',
+    4: '/coffee-bean/guatemala-antigua/4',
+    5: '/coffee-bean/kenya-aa-neri/5',
+    6: '/coffee-bean/panama-geisha/6',
+    7: '/coffee-bean/costa-rica/7',
+    8: '/coffee-bean/ethiopia-hambella/8',
+    9: '/coffee-bean/indonesia-mandarin/9',
+    10: '/coffee-bean/peru-bourbon/10'
+  }
+  router.push(routes[props.bean.id] || `/product/${props.bean.id}`)
+}
 </script>
 
 <template>
-  <div 
-    class="coffee-bean-card" 
-    :class="{ hovered: isHovered, adding: isAdding }"
-    @mouseenter="isHovered = true"
-    @mouseleave="isHovered = false"
-  >
+  <div class="coffee-bean-card" :class="{ hovered: isHovered, adding: isAdding }" :style="{ transform: `perspective(1000px) rotateX(${rotation.x}deg) rotateY(${rotation.y}deg)` }" ref="cardRef" @mouseenter="isHovered = true" @mouseleave="isHovered = false; handleMouseLeave()" @mousemove="handleMouseMove" @click="openDetail">
     <div class="card-image-wrapper">
-      <img :src="bean.image" :alt="bean.name" class="card-image" />
-      <div class="image-overlay">
-        <button class="add-to-cart-btn" @click="handleAddToCart">
-          <span v-if="!isAdding">加入购物车</span>
-          <span v-else>已加入</span>
-        </button>
-      </div>
+      <img :src="bean.image" :alt="bean.name" class="card-image" loading="lazy" />
+      <button class="quick-add" @click.stop="handleAddToCart">加入购物车</button>
     </div>
-    
     <div class="card-content">
       <div class="origin-badge">{{ bean.origin }}</div>
       <h3 class="card-title">{{ bean.name }}</h3>
       <p class="card-description">{{ bean.description }}</p>
-      <div class="card-footer">
-        <div class="price">
-          <span class="currency">¥</span>
-          <span class="amount">{{ bean.price }}</span>
-          <span class="unit">/{{ bean.weight }}</span>
-        </div>
-        <div class="rating">
-          <span class="stars">★★★★★</span>
-          <span class="count">({{ bean.reviews }})</span>
-        </div>
-      </div>
+      <div class="card-footer"><div class="price"><span class="currency">¥</span><span class="amount">{{ bean.price }}</span><span class="unit">/{{ bean.weight }}</span></div><div class="rating"><span class="stars">★★★★★</span><span class="count">{{ bean.rating }}</span></div></div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.coffee-bean-card {
-  background: #fff;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 4px 12px rgba(45, 31, 20, 0.06);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.coffee-bean-card:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 16px 32px rgba(45, 31, 20, 0.12);
-}
-
-.card-image-wrapper {
-  position: relative;
-  width: 100%;
-  height: 200px;
-  overflow: hidden;
-  background: #F5F3EF;
-}
-
-.card-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.coffee-bean-card:hover .card-image {
-  transform: scale(1.1);
-}
-
-.image-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(45, 31, 20, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.coffee-bean-card:hover .image-overlay {
-  opacity: 1;
-}
-
-.add-to-cart-btn {
-  background: #fff;
-  color: #2D1F14;
-  border: none;
-  padding: 0.8rem 2rem;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  transform: translateY(20px);
-}
-
-.coffee-bean-card:hover .add-to-cart-btn {
-  transform: translateY(0);
-}
-
-.add-to-cart-btn:hover {
-  background: #F5F3EF;
-}
-
-.card-content {
-  padding: 1.25rem;
-}
-
-.origin-badge {
-  display: inline-block;
-  background: #F5E6D3;
-  color: #5C4033;
-  font-size: 0.7rem;
-  padding: 0.25rem 0.75rem;
-  border-radius: 20px;
-  margin-bottom: 0.75rem;
-  letter-spacing: 0.05em;
-}
-
-.card-title {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: #2D1F14;
-  margin: 0 0 0.5rem 0;
-  line-height: 1.3;
-}
-
-.card-description {
-  font-size: 0.875rem;
-  color: #6B5B4F;
-  margin: 0 0 1rem 0;
-  line-height: 1.5;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.card-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-}
-
-.price {
-  display: flex;
-  align-items: baseline;
-}
-
-.currency {
-  font-size: 0.875rem;
-  color: #8B7355;
-  margin-right: 0.125rem;
-}
-
-.amount {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #2D1F14;
-}
-
-.unit {
-  font-size: 0.75rem;
-  color: #8B7355;
-  margin-left: 0.25rem;
-}
-
-.rating {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.stars {
-  font-size: 0.75rem;
-  color: #FAAD14;
-}
-
-.count {
-  font-size: 0.7rem;
-  color: #8B7355;
-}
-
-.coffee-bean-card.adding {
-  animation: pulseAdd 0.6s ease;
-}
-
-@keyframes pulseAdd {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.02); }
-}
+.coffee-bean-card { height: 440px; display: flex; flex-direction: column; overflow: hidden; background: var(--color-surface); border-radius: var(--radius-md); box-shadow: var(--shadow-soft); border: 1px solid var(--color-line); transition: transform 0.3s ease-out, box-shadow 0.3s ease-out; cursor: pointer; transform-style: preserve-3d; }
+.coffee-bean-card:hover { box-shadow: var(--shadow-hover); }
+.card-image-wrapper { position: relative; height: 220px; flex-shrink: 0; background: linear-gradient(135deg, rgba(200,184,168,0.24), rgba(248,245,240,0.92)); }
+.card-image { width: 100%; height: 100%; object-fit: cover; transition: transform 380ms ease; }
+.coffee-bean-card:hover .card-image { transform: scale(1.05); }
+.quick-add { position: absolute; right: 16px; bottom: 16px; padding: 10px 14px; border-radius: 999px; background: rgba(58,40,27,0.92); color: #fff; font-size: 12px; opacity: 0; transform: translateY(8px); transition: opacity var(--transition), transform var(--transition); }
+.coffee-bean-card:hover .quick-add { opacity: 1; transform: translateY(0); }
+.card-content { flex: 1; padding: var(--card-padding) var(--card-padding) var(--card-padding) 28px; display: flex; flex-direction: column; gap: 12px; }
+.origin-badge { display: inline-flex; width: fit-content; padding: 4px 10px; border-radius: 999px; background: rgba(200,184,168,0.24); color: var(--color-primary); font-size: var(--fs-small); }
+.card-title { font-size: var(--fs-h3); color: var(--color-primary); line-height: 1.4; }
+.card-description { color: var(--color-text); font-size: var(--fs-body); line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; flex-shrink: 0; }
+.card-footer { margin-top: auto; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.amount { font-size: var(--fs-price); font-weight: 700; color: var(--color-primary); }
+.unit, .currency, .count { color: var(--color-muted); font-size: var(--fs-small); }
 </style>

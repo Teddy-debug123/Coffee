@@ -22,8 +22,8 @@ const app = createApp(App)
  * - createPinia(): Pinia 状态管理
  * - ElementPlus: Element Plus UI 组件库
  */
-app.use(router)
 app.use(createPinia())
+app.use(router)
 app.use(ElementPlus)
 
 /**

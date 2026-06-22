@@ -227,6 +227,21 @@ CREATE TABLE `coffee_review` (
   CONSTRAINT `fk_review_user` FOREIGN KEY (`user_id`) REFERENCES `coffee_user` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户评价表';
 
+-- --------------------------------------------------------
+-- 表结构: 邮箱订阅表 (email_subscription)
+-- --------------------------------------------------------
+DROP TABLE IF EXISTS `email_subscription`;
+CREATE TABLE `email_subscription` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '订阅ID',
+  `email` VARCHAR(100) NOT NULL COMMENT '邮箱地址',
+  `status` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '状态: 0-取消订阅, 1-已订阅',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_email` (`email`),
+  KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='邮箱订阅表';
+
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- --------------------------------------------------------

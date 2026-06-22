@@ -48,7 +48,7 @@ export const forgotPassword = (data) => {
 /**
  * 重置密码接口
  * @param {Object} data - 重置密码数据
- * @param {string} data.token - 重置令牌
+ * @param {string} data.email - 邮箱
  * @param {string} data.password - 新密码
  * @returns {Promise} - 重置密码结果
  */
