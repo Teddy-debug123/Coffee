@@ -173,6 +173,39 @@ loader.load('/coffee_bean.glb', (gltf) => { ... })
    - 侧边栏滑入滑出
    - 内容淡入效果
 
+### 3.7 UI组件库集成
+
+本项目集成了 **Element Plus** 组件库，按需引入并使用了以下组件：
+
+| 组件 | 用途 | 使用场景 |
+|------|------|----------|
+| `ElMessage` | 消息提示 | 登录成功/失败、注册成功、加入购物车成功等操作反馈 |
+| `ElForm` / `ElFormItem` / `ElInput` | 表单录入 | 用户注册、忘记密码等表单页面的数据验证与输入 |
+| `ElButton` | 按钮交互 | 注册提交、密码重置提交等表单操作按钮 |
+| `ElMessageBox` | 对话框 | 登录提示、商品下架确认等需要用户确认的操作 |
+
+**使用示例：**
+
+```javascript
+// 登录成功提示
+ElMessage.success('登录成功')
+
+// 登录失败提示
+ElMessage.error('登录失败，请稍后重试')
+
+// 登录确认对话框
+await ElMessageBox.confirm('需要登录后才能加入购物车', '提示', {
+  confirmButtonText: '去登录',
+  cancelButtonText: '取消'
+})
+```
+
+下图为注册页面使用 Element Plus 表单组件的效果：
+
+![注册页面使用 Element Plus 组件效果](docs/screenshots/register-element-plus.png)
+
+---
+
 ### 4. 状态管理系统
 
 #### Cart Store (cart.js)
@@ -223,13 +256,96 @@ checkAuth()           // 验证登录状态
 }
 ```
 
-### 6. HTTP请求封装
+### 6. Axios网络请求封装与应用
 
-#### request.js
-- Axios实例配置
-- 请求拦截器（添加Token）
-- 响应拦截器（统一错误处理）
-- 错误提示（Element Plus Message）
+#### （1）功能描述
+
+项目在 `src/utils/request.js` 中封装了统一的 Axios 请求模块，提供以下核心功能：
+
+| 功能 | 说明 |
+|------|------|
+| **baseURL配置** | 支持环境变量 `VITE_APP_API_BASE_URL`，默认 `/api` |
+| **请求超时** | 10秒超时限制 |
+| **请求拦截器** | 自动在请求头添加 JWT Token |
+| **响应拦截器** | 统一错误处理、401自动跳转登录页 |
+| **错误提示** | 使用 Element Plus ElMessage 展示错误信息 |
+
+#### （2）功能实现效果
+
+- **登录请求成功**：获取 Token 并存储到 localStorage
+- **登录请求失败**：显示错误提示（如"验证码错误"）
+- **401未授权**：自动清除 Token 并跳转登录页
+- **网络错误**：显示"请求失败"错误提示
+
+#### （3）核心代码
+
+**Axios实例创建** ([request.js](file:///g:/coffee/src/utils/request.js#L7-L11))：
+```javascript
+const service = axios.create({
+  baseURL: import.meta.env.VITE_APP_API_BASE_URL || '/api',
+  timeout: 10000,
+  headers: { 'Content-Type': 'application/json;charset=utf-8' }
+})
+```
+
+**请求拦截器** ([request.js](file:///g:/coffee/src/utils/request.js#L13-L19))：
+```javascript
+service.interceptors.request.use((config) => {
+  const token = (localStorage.getItem('token') || '').trim()
+  if (token && token !== 'undefined' && token !== 'null') {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+}, (error) => Promise.reject(error))
+```
+
+**响应拦截器** ([request.js](file:///g:/coffee/src/utils/request.js#L21-L56))：
+```javascript
+service.interceptors.response.use((response) => {
+  const res = response.data
+  if (res.code !== 200) {
+    if (res.code === 401) {
+      localStorage.removeItem('token')
+      window.location.href = '/login?redirect=' + encodeURIComponent(path)
+      return Promise.reject(new Error('未登录'))
+    }
+    ElMessage.error(res.message || '请求失败')
+    return Promise.reject(new Error(res.message || '请求失败'))
+  }
+  return res.data
+}, (error) => {
+  if (error?.response?.status === 401) {
+    // 401处理逻辑...
+  }
+  ElMessage.error(error.response.data?.message || '请求失败')
+  return Promise.reject(error)
+})
+```
+
+**API接口统一管理** ([api/index.js](file:///g:/coffee/src/api/index.js))：
+```javascript
+export const auth = {
+  login: (data) => request.post('/auth/login', data),
+  register: (data) => request.post('/auth/register', data),
+  getCaptcha: () => request.get('/auth/captcha')
+}
+
+export const cart = {
+  addItem: (data) => request.post('/cart/add', data),
+  getItems: () => request.get('/cart/items'),
+  removeItem: (cartId) => request.delete(`/cart/remove/${cartId}`)
+}
+```
+
+**调用示例** ([stores/user.js](file:///g:/coffee/src/stores/user.js#L23-L29))：
+```javascript
+const login = async (username, password, captcha) => {
+  const data = await auth.login({ username, password, captcha, captchaToken: captchaToken.value })
+  setToken(data.token)
+  setUserInfo(data.user)
+  return data
+}
+```
 
 ---
 
